@@ -1,0 +1,1828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Agent Brainstormer</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            overflow: hidden; /* Prevent body scroll, allow chat container to scroll */
+        }
+
+        /* --- ChatGPT inspired Styling --- */
+        .sidebar {
+            background-color: #202123;
+            color: #ececec;
+            flex-shrink: 0;
+            width: 260px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-header {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            margin: 0.25rem 0.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            color: #ececec;
+        }
+
+        .sidebar-item:hover {
+            background-color: #343541;
+        }
+
+        .sidebar-item.active {
+            background-color: #343541;
+        }
+
+        .sidebar-item-icon {
+            margin-right: 0.75rem;
+            width: 20px;
+            text-align: center;
+        }
+
+        .chat-main {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #343541;
+        }
+
+        .chat-area {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-message-container {
+            max-width: 768px; /* Max width for message bubbles */
+            margin-left: auto;
+            margin-right: auto;
+            width: 100%;
+            margin-bottom: 1.5rem;
+        }
+
+        .chat-message {
+            display: flex;
+            padding: 1.5rem 0; /* Padding for each message block */
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08); /* Separator */
+            background-color: #343541; /* Default for AI */
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .chat-message.user-message {
+            background-color: #343541; /* User messages also have this background */
+            color: #ececec;
+        }
+
+        .chat-message.agent-message {
+            background-color: #444654; /* Slightly different background for agent */
+            color: #d1d5db;
+        }
+
+        .chat-message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-right: 1rem;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            position: relative;
+        }
+        
+        .chat-message-avatar.user-avatar {
+            background-color: #1a73e8; /* Blue for user */
+        }
+
+        /* Pastel colors for agents in chat messages */
+        .chat-message-avatar.designer { background: linear-gradient(135deg, #f8bbd9 0%, #e91e63 100%); }
+        .chat-message-avatar.marketer { background: linear-gradient(135deg, #c8e6c9 0%, #4caf50 100%); }
+        .chat-message-avatar.engineer { background: linear-gradient(135deg, #bbdefb 0%, #2196f3 100%); }
+        .chat-message-avatar.investor { background: linear-gradient(135deg, #fff59d 0%, #ffc107 100%); color: #333; }
+        .chat-message-avatar.legal { background: linear-gradient(135deg, #ffcdd2 0%, #f44336 100%); }
+        .chat-message-avatar.system { background: linear-gradient(135deg, #e1bee7 0%, #9c27b0 100%); }
+        .chat-message-avatar.custom { background: linear-gradient(135deg, #d1c4e9 0%, #7b1fa2 100%); }
+
+        .chat-message-content {
+            flex-grow: 1;
+            font-size: 1rem;
+            line-height: 1.6;
+            color: #d1d5db; /* Light gray text for AI responses */
+        }
+        
+        .chat-message.user-message .chat-message-content {
+            color: #ececec; /* Slightly lighter for user input */
+        }
+
+        .chat-message-content p {
+            margin-bottom: 0.75rem;
+        }
+
+        .chat-message-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .chat-message-content strong {
+            font-weight: 600;
+            color: inherit;
+        }
+
+        .chat-message-content em {
+            font-style: italic;
+            color: inherit;
+        }
+
+        .chat-message-content ul, .chat-message-content ol {
+            margin: 0.75rem 0;
+            padding-left: 1.5rem;
+        }
+
+        .chat-message-content li {
+            margin-bottom: 0.5rem;
+            list-style-position: outside;
+        }
+        
+        .chat-message-content ul li { list-style-type: disc; }
+        .chat-message-content ol li { list-style-type: decimal; }
+
+        .chat-input-area {
+            background-color: #343541;
+            padding: 1.5rem 1rem 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            position: relative; /* For actions below input */
+        }
+        
+        .chat-input-wrapper {
+            max-width: 768px;
+            margin-left: auto;
+            margin-right: auto;
+            display: flex;
+            align-items: flex-end; /* Align input with send button */
+            background-color: #40414f;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+        }
+
+        .chat-input {
+            flex-grow: 1;
+            background-color: transparent;
+            border: none;
+            padding: 0.75rem 1rem;
+            color: #ececec;
+            font-size: 1rem;
+            line-height: 1.5rem;
+            outline: none;
+            resize: none; /* Allow vertical resizing */
+            min-height: 2.5rem;
+            max-height: 12rem; /* Limit max height */
+            overflow-y: auto;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .chat-input:focus {
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        .chat-input::placeholder {
+            color: #8e8ea0;
+            transition: color 0.3s ease;
+        }
+
+        .chat-input:focus::placeholder {
+            color: #9ca3af;
+        }
+
+        .send-button {
+            background-color: #1a73e8;
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            margin: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .send-button:hover:not(:disabled) {
+            background-color: #155bb5;
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .send-button:not(:disabled):hover {
+            background-color: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .send-button:not(:disabled):active {
+            transform: translateY(0);
+        }
+
+        .chat-actions {
+            max-width: 768px;
+            margin-left: auto;
+            margin-right: auto;
+            padding: 0.75rem 0 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-action-button {
+            display: flex;
+            align-items: center;
+            background-color: #40414f;
+            color: #d1d5db;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            transform: translateY(0);
+        }
+
+        .chat-action-button:hover {
+            background-color: #55566b;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .chat-action-button:active {
+            transform: translateY(0);
+        }
+
+        /* Typing indicator */
+        .typing-indicator {
+            background-color: #444654;
+            padding: 1rem 1.5rem;
+            max-width: 768px;
+            margin: 0 auto;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            color: #d1d5db;
+            font-size: 0.9rem;
+            display: none; /* Hidden by default */
+        }
+        .typing-indicator.active {
+            display: flex;
+            align-items: center;
+        }
+        .typing-indicator .dot {
+            width: 6px;
+            height: 6px;
+            background-color: #8e8ea0;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator .dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator .dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        /* Welcome message */
+        .welcome-message {
+            text-align: center;
+            color: #8e8ea0;
+            padding-top: 5rem;
+        }
+
+        .welcome-message h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #d1d5db;
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            color: white;
+            transform: translateX(120%);
+            transition: transform 0.3s ease-out;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .toast.show {
+            transform: translateX(0);
+        }
+        .toast.success { background-color: #10b981; } /* Green */
+        .toast.error { background-color: #ef4444; }   /* Red */
+        .toast.info { background-color: #3b82f6; }    /* Blue */
+        
+        /* Modal Styling */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Mobile Menu Toggle */
+        .mobile-menu-toggle {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+            background: #343541;
+            border: none;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        .mobile-close-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.2s;
+        }
+
+        .mobile-close-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 280px;
+            }
+            
+            .main-content {
+                margin-left: 280px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .mobile-menu-toggle {
+                display: block;
+            }
+            
+            .mobile-close-btn {
+                display: block;
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: 100vh;
+                position: fixed;
+                top: 0;
+                left: -100%;
+                z-index: 1000;
+                transition: left 0.3s ease;
+                overflow-y: auto;
+            }
+            
+            .sidebar.open {
+                left: 0;
+            }
+            
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+                padding-top: 60px;
+            }
+            
+            .chat-container {
+                height: calc(100vh - 180px);
+            }
+            
+            .chat-input-container {
+                flex-direction: column;
+                gap: 10px;
+                padding: 15px;
+            }
+            
+            .chat-actions {
+                flex-direction: column;
+                gap: 10px;
+                padding: 0 15px 15px;
+            }
+            
+            .chat-action-button {
+                width: 100%;
+                justify-content: center;
+                padding: 12px 20px;
+            }
+            
+            .modal-content {
+                width: 95%;
+                max-width: 95%;
+                margin: 10px;
+                max-height: 90vh;
+                overflow-y: auto;
+            }
+            
+            .expert-dropdown {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .chat-input {
+                font-size: 16px; /* Prevents zoom on iOS */
+                min-height: 50px;
+            }
+            
+            .sidebar-header h2 {
+                font-size: 1.2rem;
+            }
+            
+            .sidebar-item {
+                padding: 12px 16px;
+            }
+            
+            .expert-card {
+                padding: 12px;
+            }
+            
+            .expert-name {
+                font-size: 0.9rem;
+            }
+            
+            .expert-role {
+                font-size: 0.8rem;
+            }
+            
+            .chat-message {
+                padding: 12px 16px;
+                margin: 8px 0;
+            }
+            
+            .message-content {
+                font-size: 14px;
+                line-height: 1.4;
+            }
+        }
+        .modal-content {
+            background-color: #343541;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 500px;
+            color: #ececec;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 0.75rem;
+        }
+        .modal-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        .modal-close-button {
+            background: none;
+            border: none;
+            color: #8e8ea0;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .modal-body label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: #d1d5db;
+        }
+        .modal-body input, .modal-body textarea {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background-color: #40414f;
+            color: #ececec;
+            font-size: 1rem;
+            outline: none;
+        }
+        .modal-body input:focus, .modal-body textarea:focus {
+            border-color: #1a73e8;
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        .modal-button {
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .modal-button.primary {
+            background-color: #1a73e8;
+            color: white;
+        }
+        .modal-button.primary:hover {
+            background-color: #155bb5;
+        }
+        .modal-button.secondary {
+            background-color: #40414f;
+            color: #d1d5db;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .modal-button.secondary:hover {
+            background-color: #55566b;
+        }
+
+        /* Expert levels modal */
+        .expert-level-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .expert-level-item:last-child {
+            border-bottom: none;
+        }
+        .expert-level-name {
+            font-weight: 600;
+        }
+        .expert-level-rating {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .star-icon.filled {
+            color: #ffc107; /* Gold star */
+        }
+        .star-icon.empty {
+            color: #8e8ea0; /* Gray star */
+        }
+
+        /* Export Options Modal */
+        .export-option {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            background-color: #40414f;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .export-option:hover {
+            background-color: #55566b;
+        }
+        .export-option-icon {
+            font-size: 1.5rem;
+            color: #1a73e8;
+        }
+        .export-option-text h3 {
+            font-weight: 600;
+        }
+        .export-option-text p {
+            font-size: 0.875rem;
+            color: #8e8ea0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Overall Container for ChatGPT-like Interface -->
+    <div class="flex h-screen bg-gray-700">
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle" onclick="toggleSidebar()">
+            <i class="fas fa-bars"></i>
+        </button>
+        
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-md flex items-center justify-center">
+                        <i class="fas fa-brain text-white text-md"></i>
+                    </div>
+                    <span class="text-lg font-semibold text-white">Brainstormer</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="startNewChat()" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="mobile-close-btn hidden md:hidden" onclick="toggleSidebar()">
+                        <i class="fas fa-times text-white"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto pt-4 pb-4">
+                <div class="px-3 pb-3">
+                    <div class="sidebar-item" onclick="startNewChat()">
+                        <div class="sidebar-item-icon"><i class="fas fa-plus"></i></div>
+                        <span>New chat</span>
+                    </div>
+                    <div class="sidebar-item">
+                        <div class="sidebar-item-icon"><i class="fas fa-search"></i></div>
+                        <span>Search chats</span>
+                    </div>
+                    <div class="sidebar-item" onclick="showCustomExpertModal()">
+                        <div class="sidebar-item-icon"><i class="fas fa-user-plus"></i></div>
+                        <span>Add Custom Expert</span>
+                    </div>
+                </div>
+
+                <div class="px-3 py-2 text-gray-400 text-xs font-semibold uppercase">Chats</div>
+                <div id="chat-history-list" class="space-y-1 px-2">
+                    <!-- Chat history items will be loaded here -->
+                </div>
+
+                <div class="px-3 py-2 text-gray-400 text-xs font-semibold uppercase mt-4">Experts</div>
+                <div id="agents-list" class="space-y-1 px-2">
+                    <!-- Agents will be loaded here -->
+                </div>
+            </div>
+
+            <div class="sidebar-footer p-4 border-t border-gray-800">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-white text-sm">A</div>
+                    <span class="text-sm font-medium">User Account</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chat Content -->
+        <div class="flex-1 flex flex-col">
+            <div class="chat-main">
+                <div class="flex-1 overflow-y-auto chat-area" id="messages-container">
+                    <!-- Welcome message -->
+                    <div class="welcome-message">
+                        <h3>Ready when you are.</h3>
+                        <p>Choose an expert to start brainstorming!</p>
+                    </div>
+                </div>
+
+                <!-- Typing Indicator -->
+                <div id="typing-indicator" class="typing-indicator">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <span class="ml-2">Expert is thinking...</span>
+                </div>
+
+                <!-- Chat Input and Actions -->
+                <div class="chat-input-area pb-3">
+                    <div class="chat-input-wrapper">
+                        <textarea id="message-input" class="chat-input" placeholder="Ask anything..." rows="1" onkeypress="handleKeyPress(event)" oninput="autoExpand(this)"></textarea>
+                        <button id="send-button" class="send-button" onclick="sendMessage()" disabled>
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                    </div>
+                    <div class="chat-actions">
+                        <div class="flex space-x-2">
+                            <button class="chat-action-button" onclick="showExportOptionsModal()">
+                                <i class="fas fa-file-export mr-2"></i>Export Output
+                            </button>
+                            <button class="chat-action-button" onclick="showFeedbackModal()">
+                                <i class="fas fa-thumbs-up mr-2"></i>Give Feedback
+                            </button>
+                            <button class="chat-action-button" onclick="showExpertLevelsModal()">
+                                <i class="fas fa-star mr-2"></i>Expert Levels
+                            </button>
+                        </div>
+                        <div>
+                            <select id="agent-dropdown" class="bg-gray-700 text-white text-sm px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="">Select Expert</option>
+                                <!-- Agents will be dynamically loaded here -->
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Custom Expert Modal -->
+    <div id="custom-expert-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Custom Expert</h2>
+                <button class="modal-close-button" onclick="closeAllModals()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label for="custom-expert-name">Name:</label>
+                <input type="text" id="custom-expert-name" placeholder="e.g., Data Scientist">
+                
+                <label for="custom-expert-role">Role:</label>
+                <input type="text" id="custom-expert-role" placeholder="e.g., Machine Learning Specialist">
+
+                <label for="custom-expert-persona">Persona:</label>
+                <textarea id="custom-expert-persona" rows="3" placeholder="e.g., Analytical, data-driven, problem-solver..."></textarea>
+
+                <label for="custom-expert-expertise">Expertise (comma-separated):</label>
+                <textarea id="custom-expert-expertise" rows="3" placeholder="e.g., Python, TensorFlow, data modeling..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-button secondary" onclick="closeAllModals()">Cancel</button>
+                <button class="modal-button primary" onclick="addCustomExpert()">Add Expert</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Options Modal -->
+    <div id="export-options-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Export Chat</h2>
+                <button class="modal-close-button" onclick="closeExportOptionsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="export-option" onclick="exportChat('pdf')">
+                    <i class="fas fa-file-pdf export-option-icon text-red-500"></i>
+                    <div class="export-option-text">
+                        <h3>Export as PDF</h3>
+                        <p>Generate a PDF document of the current chat.</p>
+                    </div>
+                </div>
+                <div class="export-option" onclick="exportChat('notion')">
+                    <i class="fas fa-sticky-note export-option-icon text-purple-500"></i>
+                    <div class="export-option-text">
+                        <h3>Export to Notion (Copy Markdown)</h3>
+                        <p>Copy formatted Markdown to paste into Notion.</p>
+                    </div>
+                </div>
+                <div class="export-option" onclick="exportChat('googledocs')">
+                    <i class="fas fa-file-alt export-option-icon text-blue-500"></i>
+                    <div class="export-option-text">
+                        <h3>Export to Google Docs (Copy Rich Text)</h3>
+                        <p>Copy rich text to paste directly into Google Docs.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-button secondary" onclick="closeExportOptionsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Give Feedback</h2>
+                <button class="modal-close-button" onclick="closeAllModals()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-4 text-sm text-gray-300">Help us improve by rating the last expert response.</p>
+                <div id="feedback-response-display" class="bg-gray-600 p-3 rounded-md mb-4 text-sm max-h-32 overflow-y-auto">
+                    <!-- Last agent response will be displayed here -->
+                </div>
+                <label class="block mb-2">Your Rating:</label>
+                <div class="flex items-center space-x-3 mb-4">
+                    <button class="modal-button primary flex-1" onclick="submitFeedback(true)"><i class="fas fa-thumbs-up mr-2"></i>Good</button>
+                    <button class="modal-button secondary flex-1" onclick="submitFeedback(false)"><i class="fas fa-thumbs-down mr-2"></i>Bad</button>
+                </div>
+                <label for="feedback-comment" class="block mb-2">Comments (Optional):</label>
+                <textarea id="feedback-comment" rows="3" placeholder="Tell us more about your experience..." class="w-full"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-button secondary" onclick="closeAllModals()">Cancel</button>
+                <button class="modal-button primary" onclick="sendFeedback()">Submit Feedback</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expert Levels Modal -->
+    <div id="expert-levels-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Expert Levels</h2>
+                <button class="modal-close-button" onclick="event.stopPropagation(); closeAllModals()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-4 text-sm text-gray-300">Track the performance and feedback for each expert.</p>
+                <div id="expert-levels-list" class="space-y-2 max-h-64 overflow-y-auto">
+                    <!-- Expert levels will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-button secondary" onclick="event.stopPropagation(); closeAllModals()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script>
+        // Global variables
+        let ws = null;
+        let sessionId = null;
+        let agents = []; // Predefined agents from backend
+        let customExperts = []; // User-defined custom experts
+        let allExperts = []; // Combined list of all available experts (predefined + custom)
+        let selectedExpertId = ''; // Holds the ID (e.g., 'designer', 'custom_expert_123') of the currently selected expert
+        let currentChatId = null; // ID for the current chat session
+        let chatHistory = []; // Stores summaries of all chats
+        let currentChatMessages = []; // Stores messages for the currently active chat
+        let expertFeedback = {}; // Stores feedback for experts: {expertId: {good: count, bad: count, level: calculatedLevel}}
+
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            // Force close all modals on page load
+            closeAllModals();
+            initializeApp();
+        });
+
+        async function initializeApp() {
+            try {
+                // Load existing data from localStorage
+                loadChatHistory();
+                loadCustomExperts();
+                loadExpertFeedback();
+
+                // Create session
+                const sessionResponse = await fetch('http://localhost:8000/sessions', { method: 'POST' });
+                const sessionData = await sessionResponse.json();
+                sessionId = sessionData.session_id;
+
+                // Load predefined agents from backend
+                const agentsResponse = await fetch('http://localhost:8000/agents');
+                const agentsData = await agentsResponse.json();
+                agents = agentsData.agents.map(agent => ({ ...agent, type: 'predefined' }));
+                
+                // Combine all experts
+                updateAllExperts();
+
+                renderSidebarExperts();
+                renderAgentDropdown(); // Render dropdown with all experts
+                renderChatHistory();
+                connectWebSocket();
+                
+                // If there's no current chat or last chat, start a new one
+                if (!currentChatId || currentChatMessages.length === 0) {
+                    startNewChat(false); // Do not save on init
+                } else {
+                    renderChatMessages();
+                    updateChatInfo();
+                }
+
+                document.getElementById('message-input').addEventListener('input', toggleSendButton);
+                document.getElementById('message-input').addEventListener('keyup', toggleSendButton);
+
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+                showToast('Failed to connect to the server. Please make sure the backend is running.', 'error');
+            }
+        }
+
+        // --- Core UI Rendering ---
+
+        function renderSidebarExperts() {
+            const agentsContainer = document.getElementById('agents-list');
+            agentsContainer.innerHTML = ''; // Clear existing list
+
+            allExperts.filter(expert => expert.type === 'predefined').forEach(expert => {
+                const expertCard = document.createElement('div');
+                const expertType = getExpertType(expert.name);
+                expertCard.className = `sidebar-item agent-card ${expertType} flex items-center`;
+                expertCard.setAttribute('data-expert-id', expert.id);
+                expertCard.onclick = () => selectExpert(expert.id);
+                
+                const expertIcon = getExpertIcon(expertType);
+                
+                expertCard.innerHTML = `
+                    <div class="sidebar-item-icon"><i class="${expertIcon}"></i></div>
+                    <span class="truncate">${expert.name}</span>
+                `;
+                
+                agentsContainer.appendChild(expertCard);
+            });
+
+            // Add custom experts
+            customExperts.forEach(expert => {
+                const expertCard = document.createElement('div');
+                expertCard.className = `sidebar-item agent-card custom flex items-center`;
+                expertCard.setAttribute('data-expert-id', expert.id);
+                expertCard.onclick = () => selectExpert(expert.id);
+                
+                const expertIcon = getExpertIcon('custom'); // Generic icon for custom
+                
+                expertCard.innerHTML = `
+                    <div class="sidebar-item-icon"><i class="${expertIcon}"></i></div>
+                    <span class="truncate">${expert.name}</span>
+                    <button onclick="event.stopPropagation(); deleteCustomExpert('${expert.id}')" class="ml-auto text-gray-500 hover:text-red-500 transition-colors">
+                        <i class="fas fa-trash-alt text-xs"></i>
+                    </button>
+                `;
+                
+                agentsContainer.appendChild(expertCard);
+            });
+
+            updateExpertSelectionVisual();
+        }
+
+        function renderAgentDropdown() {
+            const dropdown = document.getElementById('agent-dropdown');
+            dropdown.innerHTML = '<option value="">Select Expert</option>'; // Clear and add default
+            
+            allExperts.forEach(expert => {
+                const option = document.createElement('option');
+                option.value = expert.id;
+                option.textContent = expert.name;
+                dropdown.appendChild(option);
+            });
+
+            // Set selected value
+            if (selectedExpertId) {
+                dropdown.value = selectedExpertId;
+            } else {
+                dropdown.value = '';
+            }
+
+            dropdown.onchange = (event) => selectExpert(event.target.value);
+        }
+
+        function renderChatHistory() {
+            const historyContainer = document.getElementById('chat-history-list');
+            historyContainer.innerHTML = '';
+            
+            if (chatHistory.length === 0) {
+                historyContainer.innerHTML = `
+                    <div class="text-gray-500 text-xs text-center p-4">No chat history yet</div>
+                `;
+                return;
+            }
+            
+            chatHistory.forEach(chat => {
+                const historyItem = document.createElement('div');
+                historyItem.className = `sidebar-item chat-history-item ${chat.id === currentChatId ? 'active' : ''}`;
+                historyItem.onclick = () => loadChat(chat.id);
+                
+                const time = new Date(chat.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                
+                historyItem.innerHTML = `
+                    <div class="flex-1 truncate">${chat.title}</div>
+                    <button onclick="event.stopPropagation(); deleteChat('${chat.id}')" class="ml-2 text-gray-500 hover:text-red-500 transition-colors">
+                        <i class="fas fa-trash-alt text-xs"></i>
+                    </button>
+                `;
+                
+                historyContainer.appendChild(historyItem);
+            });
+        }
+        
+        function renderChatMessages() {
+            const messagesContainer = document.getElementById('messages-container');
+            messagesContainer.innerHTML = ''; // Clear existing messages
+            
+            if (currentChatMessages.length === 0) {
+                if (selectedExpertId) {
+                    const selectedExpert = allExperts.find(e => e.id === selectedExpertId);
+                    messagesContainer.innerHTML = `
+                        <div class="welcome-message">
+                            <h3>Ready when you are.</h3>
+                            <p>You're chatting with ${selectedExpert ? selectedExpert.name : 'an expert'}. Type your message below!</p>
+                        </div>
+                    `;
+                } else {
+                    messagesContainer.innerHTML = `
+                        <div class="welcome-message">
+                            <h3>Ready when you are.</h3>
+                            <p>Please select an expert from the dropdown below to start chatting!</p>
+                        </div>
+                    `;
+                }
+                return;
+            }
+            
+            currentChatMessages.forEach(msg => {
+                addMessageToDisplay(msg.sender, msg.content, msg.role, msg.type);
+            });
+            messagesContainer.scrollTop = messagesContainer.scrollHeight; // Scroll to bottom
+        }
+
+        function addMessageToDisplay(sender, content, role, type) {
+            const messagesContainer = document.getElementById('messages-container');
+            
+            // Remove welcome message if it exists
+            const welcomeMessage = messagesContainer.querySelector('.welcome-message');
+            if (welcomeMessage) {
+                welcomeMessage.remove();
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message-container';
+
+            let avatarContent = '';
+            let avatarClass = '';
+            let senderName = sender;
+
+            if (type === 'user') {
+                avatarContent = 'U';
+                avatarClass = 'user-avatar';
+            } else if (type === 'agent') {
+                const expert = allExperts.find(e => e.name === sender);
+                const expertType = expert ? getExpertType(expert.name) : 'system';
+                avatarContent = expert ? getExpertInitials(expert.name) : 'AI';
+                avatarClass = expertType;
+                senderName = expert ? expert.name : 'AI Expert';
+            } else if (type === 'system') {
+                avatarContent = '<i class="fas fa-cog"></i>';
+                avatarClass = 'system';
+                senderName = 'System';
+            }
+
+            messageDiv.innerHTML = `
+                <div class="chat-message ${type === 'user' ? 'user-message' : 'agent-message'}">
+                    <div class="chat-message-avatar ${avatarClass}">${avatarContent}</div>
+                    <div class="chat-message-content">
+                        ${formatMessageContent(content)}
+                    </div>
+                </div>
+            `;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight; // Scroll to bottom
+        }
+
+        // --- Chat Management ---
+
+        async function startNewChat(savePrevious = true) {
+            if (savePrevious && currentChatMessages.length > 0) {
+                saveCurrentChat();
+            }
+            
+            currentChatId = 'chat_' + Date.now();
+            currentChatMessages = [];
+            selectedExpertId = ''; // Reset selected expert
+            
+            renderChatMessages(); // Show welcome message
+            updateChatInfo();
+            updateExpertSelectionVisual(); // Clear sidebar selection
+            renderAgentDropdown(); // Reset dropdown
+            toggleSendButton(); // Disable send button
+            
+            // Recreate session on backend for new chat if needed (or use existing session for simplicity)
+            // For this implementation, we'll keep using the same global sessionId for backend
+            // but manage chat history client-side for "new chat" feel.
+            showToast('New chat started!', 'info');
+        }
+        
+        function saveCurrentChat() {
+            if (currentChatMessages.length === 0) return;
+            
+            const chatTitle = generateChatTitle();
+            const selectedExpert = allExperts.find(e => e.id === selectedExpertId);
+            const chatData = {
+                id: currentChatId,
+                title: chatTitle,
+                messages: [...currentChatMessages],
+                expertId: selectedExpertId,
+                expertName: selectedExpert ? selectedExpert.name : 'All Experts',
+                timestamp: new Date().toISOString(),
+                preview: getChatPreview()
+            };
+            
+            // Add to chat history
+            const existingIndex = chatHistory.findIndex(chat => chat.id === chatData.id);
+            if (existingIndex >= 0) {
+                chatHistory[existingIndex] = chatData;
+            } else {
+                chatHistory.unshift(chatData); // Add new chats to the top
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+            
+            // Update chat history display
+            renderChatHistory();
+            showToast('Chat saved!', 'success');
+        }
+        
+        function loadChat(chatId) {
+            const chat = chatHistory.find(c => c.id === chatId);
+            if (!chat) return;
+            
+            // Save current chat if it has messages and it's a different chat
+            if (currentChatMessages.length > 0 && currentChatId !== chatId) {
+                saveCurrentChat();
+            }
+            
+            // Load chat data
+            currentChatId = chat.id;
+            currentChatMessages = [...chat.messages];
+            selectedExpertId = chat.expertId; // Set selected expert for loaded chat
+
+            // Update UI
+            renderChatMessages();
+            updateChatInfo();
+            updateExpertSelectionVisual();
+            renderAgentDropdown(); // Update dropdown selection
+            toggleSendButton(); // Enable send button if expert is selected
+            renderChatHistory(); // Update active state
+        }
+        
+        function deleteChat(chatId) {
+            if (confirm('Are you sure you want to delete this chat?')) {
+                chatHistory = chatHistory.filter(chat => chat.id !== chatId);
+                localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+                renderChatHistory();
+                
+                if (currentChatId === chatId) {
+                    startNewChat(false); // Don't save empty current chat again
+                }
+                
+                showToast('Chat deleted!', 'error');
+            }
+        }
+        
+        function generateChatTitle() {
+            if (currentChatMessages.length === 0) {
+                return 'New Chat';
+            }
+            const firstUserMessage = currentChatMessages.find(msg => msg.type === 'user');
+            if (firstUserMessage) {
+                return firstUserMessage.content.substring(0, 30) + (firstUserMessage.content.length > 30 ? '...' : '');
+            }
+            const selectedExpert = allExperts.find(e => e.id === selectedExpertId);
+            return `Chat with ${selectedExpert ? selectedExpert.name : 'Expert'}`;
+        }
+        
+        function getChatPreview() {
+            if (currentChatMessages.length === 0) return '';
+            
+            const lastMessage = currentChatMessages[currentChatMessages.length - 1];
+            return lastMessage.content.substring(0, 50) + (lastMessage.content.length > 50 ? '...' : '');
+        }
+        
+        function updateChatInfo() {
+            // In ChatGPT style, chat info is implicitly in the sidebar title.
+            // We'll update the main chat placeholder if no messages.
+            // No specific header element for current chat title in this design.
+        }
+
+        function updateExpertSelectionVisual() {
+            document.querySelectorAll('.sidebar-item.agent-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            if (selectedExpertId) {
+                const selected = document.querySelector(`.sidebar-item.agent-card[data-expert-id="${selectedExpertId}"]`);
+                if (selected) {
+                    selected.classList.add('active');
+                }
+            }
+        }
+
+        // --- Expert Management (Custom Expert Profiles) ---
+
+        function showCustomExpertModal() {
+            document.getElementById('custom-expert-modal').classList.remove('hidden');
+        }
+
+        function closeCustomExpertModal() {
+            document.getElementById('custom-expert-modal').classList.add('hidden');
+            // Clear form fields
+            document.getElementById('custom-expert-name').value = '';
+            document.getElementById('custom-expert-role').value = '';
+            document.getElementById('custom-expert-persona').value = '';
+            document.getElementById('custom-expert-expertise').value = '';
+        }
+
+        function closeAllModals() {
+            // Close all modals at once
+            document.getElementById('custom-expert-modal').classList.add('hidden');
+            document.getElementById('feedback-modal').classList.add('hidden');
+            document.getElementById('expert-levels-modal').classList.add('hidden');
+            document.getElementById('export-options-modal').classList.add('hidden');
+        }
+
+        function addCustomExpert() {
+            const name = document.getElementById('custom-expert-name').value.trim();
+            const role = document.getElementById('custom-expert-role').value.trim();
+            const persona = document.getElementById('custom-expert-persona').value.trim();
+            const expertise = document.getElementById('custom-expert-expertise').value.trim();
+
+            if (!name || !role || !persona || !expertise) {
+                showToast('Please fill all fields for the custom expert.', 'error');
+                return;
+            }
+
+            const newExpert = {
+                id: 'custom_' + Date.now(), // Unique ID for custom expert
+                name: name,
+                role: role,
+                persona: persona,
+                expertise: expertise,
+                type: 'custom'
+            };
+
+            customExperts.push(newExpert);
+            localStorage.setItem('customExperts', JSON.stringify(customExperts));
+            updateAllExperts(); // Rebuild combined list
+            renderSidebarExperts();
+            renderAgentDropdown();
+            closeCustomExpertModal();
+            showToast('Custom expert added!', 'success');
+        }
+
+        function deleteCustomExpert(expertId) {
+            if (confirm('Are you sure you want to delete this custom expert?')) {
+                customExperts = customExperts.filter(expert => expert.id !== expertId);
+                localStorage.setItem('customExperts', JSON.stringify(customExperts));
+                updateAllExperts();
+                renderSidebarExperts();
+                renderAgentDropdown();
+                if (selectedExpertId === expertId) {
+                    selectedExpertId = ''; // Deselect if deleted
+                    toggleSendButton();
+                }
+                showToast('Custom expert deleted!', 'error');
+            }
+        }
+
+        function loadCustomExperts() {
+            const savedExperts = localStorage.getItem('customExperts');
+            if (savedExperts) {
+                try {
+                    customExperts = JSON.parse(savedExperts);
+                } catch (e) {
+                    console.error('Failed to parse custom experts:', e);
+                    customExperts = [];
+                }
+            }
+        }
+
+        function updateAllExperts() {
+            allExperts = [...agents, ...customExperts];
+        }
+
+        // --- WebSocket Communication ---
+
+        function connectWebSocket() {
+            console.log('Connecting to WebSocket with sessionId:', sessionId);
+            ws = new WebSocket(`ws://localhost:8000/ws/${sessionId}`);
+            
+            ws.onopen = function(event) {
+                console.log('WebSocket connected successfully');
+                showToast('Connected to AI backend!', 'success');
+            };
+            
+            ws.onmessage = function(event) {
+                console.log('WebSocket message received:', event.data);
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+            
+            ws.onclose = function(event) {
+                console.log('WebSocket disconnected', event);
+                showToast('Disconnected from AI backend. Reconnecting...', 'error');
+                setTimeout(connectWebSocket, 3000); // Reconnect after 3 seconds
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                showToast('WebSocket error encountered!', 'error');
+            };
+        }
+
+        function handleWebSocketMessage(data) {
+            console.log('Handling WebSocket message:', data);
+            
+            if (data.type === 'agent_response') {
+                console.log('Received agent response from:', data.agent_name);
+                hideTypingIndicator();
+                addMessage(data.agent_name, data.response, data.role, 'agent');
+            } else if (data.type === 'brainstorm_complete') {
+                console.log('Received brainstorm results');
+                hideTypingIndicator();
+                displayBrainstormResults(data.results);
+            } else if (data.type === 'error') {
+                console.log('Received error:', data.message);
+                hideTypingIndicator();
+                showToast(data.message, 'error');
+            } else {
+                console.log('Unknown message type:', data.type);
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            
+            console.log('sendMessage called:', { message, selectedExpertId, allExperts: allExperts.length });
+            
+            if (!message) {
+                console.log('No message entered');
+                showToast('Please enter a message.', 'error');
+                return;
+            }
+            
+            if (!selectedExpertId) {
+                console.log('No expert selected');
+                showToast('Please select an expert first from the dropdown.', 'error');
+                return;
+            }
+
+            const selectedExpert = allExperts.find(e => e.id === selectedExpertId);
+            if (!selectedExpert) {
+                console.log('Selected expert not found:', selectedExpertId);
+                showToast('Please select an expert first.', 'error');
+                return;
+            }
+            
+            // Add user message to chat
+            addMessage('You', message, '', 'user');
+            
+            // Show typing indicator
+            showTypingIndicator(selectedExpert.name);
+            
+            // Send via WebSocket
+            const messageData = {
+                type: 'chat',
+                message: message,
+                agent_id: selectedExpert.id // Send the expert's ID (which is also the agent_id for predefined)
+            };
+            
+            console.log('Sending WebSocket message:', messageData);
+            console.log('WebSocket state:', ws.readyState);
+            
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(messageData));
+            } else {
+                console.error('WebSocket not open, state:', ws.readyState);
+                showToast('Connection lost. Please refresh the page.', 'error');
+            }
+            
+            // Clear input and disable send button
+            input.value = '';
+            input.style.height = 'auto'; // Reset textarea height
+            toggleSendButton();
+        }
+
+        function addMessage(sender, content, role, type, addToHistory = true) {
+            // Add message to display
+            addMessageToDisplay(sender, content, role, type);
+
+            // Add to current chat messages if needed
+            if (addToHistory) {
+                currentChatMessages.push({
+                    sender: sender,
+                    content: content,
+                    role: role,
+                    type: type,
+                    timestamp: new Date().toISOString()
+                });
+                // After adding a message, save the current chat
+                saveCurrentChat();
+            }
+        }
+
+
+        // --- Helper Functions ---
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const mobileToggle = document.querySelector('.mobile-menu-toggle');
+            
+            if (window.innerWidth <= 768 && 
+                sidebar.classList.contains('open') && 
+                !sidebar.contains(event.target) && 
+                !mobileToggle.contains(event.target)) {
+                sidebar.classList.remove('open');
+            }
+        });
+
+        // Close sidebar when window is resized to desktop
+        window.addEventListener('resize', function() {
+            const sidebar = document.getElementById('sidebar');
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('open');
+            }
+        });
+
+        function selectExpert(expertId) {
+            // Save current chat if switching experts and there are messages
+            if (selectedExpertId !== expertId && currentChatMessages.length > 0) {
+                saveCurrentChat();
+            }
+            
+            selectedExpertId = expertId;
+            updateExpertSelectionVisual(); // Highlight in sidebar
+            renderAgentDropdown(); // Update dropdown
+            toggleSendButton(); // Enable/disable send button
+            
+            // Also check if there's text in the input to enable send button
+            const input = document.getElementById('message-input');
+            if (input && input.value.trim() !== '') {
+                toggleSendButton();
+            }
+            
+            // Update welcome message if no messages yet
+            if (currentChatMessages.length === 0) {
+                renderChatMessages();
+            }
+            
+            showToast(`Expert selected: ${allExperts.find(e => e.id === expertId)?.name || 'None'}`, 'info');
+        }
+
+        function toggleSendButton() {
+            const input = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            if (input.value.trim() !== '' && selectedExpertId) {
+                sendButton.disabled = false;
+            } else {
+                sendButton.disabled = true;
+            }
+        }
+
+        function autoExpand(field) {
+            field.style.height = 'inherit';
+            const computed = window.getComputedStyle(field);
+            const height = parseInt(computed.getPropertyValue('border-top-width'), 10)
+                         + parseInt(computed.getPropertyValue('padding-top'), 10)
+                         + field.scrollHeight
+                         + parseInt(computed.getPropertyValue('padding-bottom'), 10)
+                         + parseInt(computed.getPropertyValue('border-bottom-width'), 10);
+            field.style.height = `${height}px`;
+            document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight; // Scroll to bottom
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault(); // Prevent new line in textarea
+                sendMessage();
+            }
+        }
+        
+        function showTypingIndicator(expertName = 'AI Expert') {
+            const indicator = document.getElementById('typing-indicator');
+            indicator.querySelector('span').textContent = `${expertName} is thinking...`;
+            indicator.classList.add('active');
+        }
+
+        function hideTypingIndicator() {
+            document.getElementById('typing-indicator').classList.remove('active');
+        }
+
+        function getExpertType(expertName) {
+            const name = expertName.toLowerCase();
+            if (name.includes('alex') || name.includes('designer')) return 'designer';
+            if (name.includes('sarah') || name.includes('marketing')) return 'marketer';
+            if (name.includes('david') || name.includes('engineer')) return 'engineer';
+            if (name.includes('rachel') || name.includes('investor')) return 'investor';
+            if (name.includes('elena') || name.includes('legal')) return 'legal';
+            // Check if it's a custom expert based on ID
+            if (selectedExpertId && selectedExpertId.startsWith('custom_')) return 'custom';
+            return 'system'; // Default or fallback
+        }
+
+        function getExpertInitials(expertName) {
+            return expertName.split(' ').map(word => word[0]).join('').toUpperCase();
+        }
+
+        function getExpertIcon(expertType) {
+            const icons = {
+                'designer': 'fas fa-palette',
+                'marketer': 'fas fa-chart-line', 
+                'engineer': 'fas fa-code',
+                'investor': 'fas fa-coins',
+                'legal': 'fas fa-balance-scale',
+                'custom': 'fas fa-user-tie', // Generic icon for custom experts
+                'system': 'fas fa-cog'
+            };
+            return icons[expertType] || 'fas fa-user-tie';
+        }
+
+        // --- Message Formatting ---
+        
+        function formatMessageContent(content) {
+            if (!content) return '';
+            
+            // Convert line breaks to <br> tags
+            let formatted = content.replace(/\n/g, '<br>');
+            
+            // Convert markdown-style formatting
+            formatted = formatted
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')              // Italic
+                .replace(/`(.*?)`/g, '<code>$1</code>')            // Inline code
+                .replace(/^# (.*$)/gm, '<h3>$1</h3>')             // H3 headers
+                .replace(/^## (.*$)/gm, '<h4>$1</h4>')            // H4 headers
+                .replace(/^### (.*$)/gm, '<h5>$1</h5>')           // H5 headers
+                .replace(/^- (.*$)/gm, '<li>$1</li>')             // List items
+                .replace(/^(\d+)\. (.*$)/gm, '<li>$2</li>')       // Numbered list items
+                .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')       // Wrap consecutive list items in ul
+                .replace(/(<li>.*<\/li>)/gs, '<ol>$1</ol>');      // Wrap consecutive numbered items in ol
+            
+            // Clean up multiple consecutive <br> tags
+            formatted = formatted.replace(/(<br>){3,}/g, '<br><br>');
+            
+            return formatted;
+        }
+
+        // --- Export Functions ---
+
+        function showExportOptionsModal() {
+            document.getElementById('export-options-modal').classList.remove('hidden');
+        }
+
+        function closeExportOptionsModal() {
+            document.getElementById('export-options-modal').classList.add('hidden');
+        }
+
+        async function exportChat(format) {
+            closeExportOptionsModal();
+            if (currentChatMessages.length === 0) {
+                showToast('No messages to export in the current chat.', 'error');
+                return;
+            }
+
+            const exportTitle = currentChatId ? generateChatTitle() : 'Brainstormer Chat';
+            let contentToExport = `<h1>${exportTitle}</h1>\n\n`;
+
+            currentChatMessages.forEach(msg => {
+                contentToExport += `<p><strong>${msg.sender} (${new Date(msg.timestamp).toLocaleString()}):</strong></p>\n`;
+                contentToExport += `<div>${formatMessageContent(msg.content)}</div>\n\n`;
+            });
+
+            if (format === 'pdf') {
+                showToast('Generating PDF...', 'info');
+                try {
+                    const element = document.createElement('div');
+                    element.innerHTML = contentToExport; // html2pdf takes HTML content
+                    await html2pdf().from(element).save(`${exportTitle}.pdf`);
+                    showToast('PDF exported successfully!', 'success');
+                } catch (error) {
+                    console.error('PDF export failed:', error);
+                    showToast('Failed to export PDF.', 'error');
+                }
+            } else if (format === 'notion') {
+                // Convert HTML to a basic Markdown format for Notion
+                const markdownContent = htmlToMarkdown(contentToExport);
+                navigator.clipboard.writeText(markdownContent)
+                    .then(() => showToast('Markdown copied to clipboard for Notion!', 'success'))
+                    .catch(err => {
+                        console.error('Failed to copy Markdown:', err);
+                        showToast('Failed to copy Markdown to clipboard.', 'error');
+                    });
+            } else if (format === 'googledocs') {
+                // Copy rich HTML content directly
+                const blob = new Blob([contentToExport], { type: 'text/html' });
+                const item = new ClipboardItem({ 'text/html': blob });
+                navigator.clipboard.write([item])
+                    .then(() => showToast('Rich text copied to clipboard for Google Docs!', 'success'))
+                    .catch(err => {
+                        console.error('Failed to copy rich text:', err);
+                        showToast('Failed to copy rich text to clipboard.', 'error');
+                    });
+            }
+        }
+
+        function htmlToMarkdown(html) {
+            let markdown = html
+                .replace(/<h1>(.*?)<\/h1>/g, '# $1\n\n')
+                .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
+                .replace(/<em>(.*?)<\/em>/g, '*$1*')
+                .replace(/<ul>/g, '\n')
+                .replace(/<\/ul>/g, '\n')
+                .replace(/<ol>/g, '\n')
+                .replace(/<\/ol>/g, '\n')
+                .replace(/<li>/g, '* ')
+                .replace(/<\/li>/g, '\n')
+                .replace(/<br>/g, '\n')
+                .replace(/<p>(.*?)<\/p>/g, '$1\n\n')
+                .replace(/<div>(.*?)<\/div>/g, '$1\n');
+            // Clean up multiple newlines
+            markdown = markdown.replace(/\n\n+/g, '\n\n');
+            return markdown.trim();
+        }
+
+
+        // --- Feedback and Expert Levels ---
+
+        function showFeedbackModal() {
+            const lastAgentMessage = currentChatMessages.slice().reverse().find(msg => msg.type === 'agent');
+            const feedbackDisplay = document.getElementById('feedback-response-display');
+            if (lastAgentMessage) {
+                feedbackDisplay.innerHTML = `
+                    <div class="font-semibold text-gray-200 mb-1">${lastAgentMessage.sender} (${lastAgentMessage.role})</div>
+                    <div class="text-gray-400">${formatMessageContent(lastAgentMessage.content)}</div>
+                `;
+                document.getElementById('feedback-modal').setAttribute('data-last-expert-id', lastAgentMessage.expertId || lastAgentMessage.sender); // Store expert ID for feedback
+            } else {
+                feedbackDisplay.innerHTML = '<p class="text-gray-400">No agent response found to give feedback on.</p>';
+                document.getElementById('feedback-modal').removeAttribute('data-last-expert-id');
+            }
+            document.getElementById('feedback-modal').classList.remove('hidden');
+        }
+
+        function closeFeedbackModal() {
+            document.getElementById('feedback-modal').classList.add('hidden');
+            document.getElementById('feedback-comment').value = ''; // Clear comment
+            document.getElementById('feedback-modal').removeAttribute('data-last-expert-id');
+            // Also close any parent modals that might be open
+            closeCustomExpertModal();
+        }
+
+        function submitFeedback(isGood) {
+            const expertId = document.getElementById('feedback-modal').getAttribute('data-last-expert-id');
+            const comment = document.getElementById('feedback-comment').value.trim();
+
+            if (!expertId) {
+                showToast('No expert selected for feedback.', 'error');
+                return;
+            }
+
+            // Initialize or update feedback for expert
+            if (!expertFeedback[expertId]) {
+                expertFeedback[expertId] = { good: 0, bad: 0, level: 1, comments: [] };
+            }
+
+            if (isGood) {
+                expertFeedback[expertId].good++;
+            } else {
+                expertFeedback[expertId].bad++;
+            }
+
+            if (comment) {
+                expertFeedback[expertId].comments.push(comment);
+            }
+
+            // Simple level calculation (can be more complex)
+            expertFeedback[expertId].level = calculateExpertLevel(expertFeedback[expertId]);
+
+            localStorage.setItem('expertFeedback', JSON.stringify(expertFeedback));
+            showToast('Feedback submitted!', 'success');
+            closeFeedbackModal();
+            renderExpertLevels(); // Update levels in modal if open
+        }
+
+        function sendFeedback() {
+            // This function is called from the feedback modal submit button
+            // It will trigger submitFeedback based on which button was clicked
+            // For now, we'll just close the modal since the actual feedback is handled by submitFeedback
+            closeFeedbackModal();
+        }
+
+        function calculateExpertLevel(feedback) {
+            const total = feedback.good + feedback.bad;
+            if (total === 0) return 1;
+            const score = (feedback.good - feedback.bad) / total; // -1 to 1
+            if (score > 0.7) return 5;
+            if (score > 0.3) return 4;
+            if (score > -0.3) return 3;
+            if (score > -0.7) return 2;
+            return 1;
+        }
+
+        function loadExpertFeedback() {
+            const savedFeedback = localStorage.getItem('expertFeedback');
+            if (savedFeedback) {
+                try {
+                    expertFeedback = JSON.parse(savedFeedback);
+                } catch (e) {
+                    console.error('Failed to parse expert feedback:', e);
+                    expertFeedback = {};
+                }
+            }
+        }
+
+        function showExpertLevelsModal() {
+            document.getElementById('expert-levels-modal').classList.remove('hidden');
+            renderExpertLevels();
+        }
+
+        function closeExpertLevelsModal() {
+            document.getElementById('expert-levels-modal').classList.add('hidden');
+            // Also close any parent modals that might be open
+            closeFeedbackModal();
+            closeCustomExpertModal();
+        }
+
+        function renderExpertLevels() {
+            const levelsList = document.getElementById('expert-levels-list');
+            levelsList.innerHTML = '';
+
+            if (allExperts.length === 0) {
+                levelsList.innerHTML = '<p class="text-gray-400 text-center">No experts available.</p>';
+                return;
+            }
+
+            allExperts.forEach(expert => {
+                const feedback = expertFeedback[expert.id] || { good: 0, bad: 0, level: 1 };
+                const level = feedback.level;
+                const stars = Array(5).fill(null).map((_, i) => 
+                    `<i class="fas fa-star star-icon ${i < level ? 'filled' : 'empty'}"></i>`
+                ).join('');
+
+                const item = document.createElement('div');
+                item.className = 'expert-level-item';
+                item.innerHTML = `
+                    <div class="expert-level-name">${expert.name} (${expert.role})</div>
+                    <div class="expert-level-rating">
+                        ${stars}
+                        <span class="text-sm ml-2">(${feedback.good} 👍 / ${feedback.bad} 👎)</span>
+                    </div>
+                `;
+                levelsList.appendChild(item);
+            });
+        }
+
+
+        // --- Toast Notification ---
+
+        function showToast(message, type = 'info') {
+            const toastContainer = document.body; // Or a specific toast container element
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+
+            toastContainer.appendChild(toast);
+
+            // Trigger reflow to ensure transition
+            void toast.offsetWidth; 
+            toast.classList.add('show');
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                toast.addEventListener('transitionend', () => toast.remove());
+            }, 3000);
+        }
+
+        // --- Initial Load ---
+        function loadChatHistory() {
+            const savedHistory = localStorage.getItem('chatHistory');
+            if (savedHistory) {
+                try {
+                    chatHistory = JSON.parse(savedHistory);
+                } catch (e) {
+                    console.error('Failed to parse chat history:', e);
+                    chatHistory = [];
+                }
+            }
+        }
+    </script>
+</body>
