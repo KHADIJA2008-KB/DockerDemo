@@ -48,8 +48,8 @@ DockerDemo/
    ```
 
 2. **Access the application:**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:5000
+   - Frontend: http://localhost:8080
+   - Backend API: http://localhost:5001
 
 3. **Stop the application:**
    ```bash
@@ -98,6 +98,20 @@ python app.py
 
 ### Frontend Development
 Open `index.html` directly in a browser or use a local server.
+
+## Pushing to GitHub
+
+1. **Create a new repository on GitHub** (e.g., `DockerDemo`)
+
+2. **Update the remote URL:**
+   ```bash
+   git remote set-url origin https://github.com/YOUR_USERNAME/DockerDemo.git
+   ```
+
+3. **Push the code:**
+   ```bash
+   git push -u origin main
+   ```
 
 ## Troubleshooting
 
