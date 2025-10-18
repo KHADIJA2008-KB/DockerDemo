@@ -1,6 +1,23 @@
 # Docker Demo Application
 
 A simple full-stack application demonstrating Docker and Docker Compose usage.
+ 
+ 
+Screenshots:
+ 
+1.   <img width="1610" height="944" alt="image" src="https://github.com/user-attachments/assets/845d1577-2fe6-4705-b458-9b973c8b46f5" />
+
+-----
+
+2.   <img width="926" height="970" alt="image" src="https://github.com/user-attachments/assets/5c69c938-d8ae-4ea0-b9e7-e6a50fb04499" />
+
+-----
+
+3.   <img width="1063" height="553" alt="image" src="https://github.com/user-attachments/assets/8b616986-edba-4d48-aa4e-1bc7067b760f" />
+
+
+-----
+
 
 ## Architecture
 
