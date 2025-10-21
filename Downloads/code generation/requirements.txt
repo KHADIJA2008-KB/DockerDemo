@@ -1,0 +1,15 @@
+# Interactive Code Generator - Requirements
+# 
+# No external dependencies required!
+# This project uses only Python standard library.
+# 
+# Minimum Python version: 3.6+
+#
+# Optional dependencies for future enhancements:
+# - For AI-generated code integration:
+#   openai>=1.0.0
+#   anthropic>=0.5.0
+#
+# - For web interface (future):
+#   fastapi>=0.109.0
+#   uvicorn>=0.27.0
